@@ -1,0 +1,36 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android scaffolding
+        run: |
+          flutter create --platform=android --org com.lifesync --project-name lifesync .
+          rm -f test/widget_test.dart
+          python3 tool/patch_android.py
+      - run: flutter pub get
+      - name: Format (áp dụng định dạng chuẩn rồi kiểm tra)
+        run: |
+          dart format lib test
+          dart format --set-exit-if-changed lib test
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LifeSync-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk

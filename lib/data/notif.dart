@@ -1,0 +1,104 @@
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
+import 'models.dart';
+
+class Notif {
+  static final FlutterLocalNotificationsPlugin _p =
+      FlutterLocalNotificationsPlugin();
+
+  static const _details = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'lifesync_reminders',
+      'LifeSync Reminders',
+      channelDescription: 'Nhắc nhở sự kiện',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+    ),
+  );
+
+  static Future<void> init() async {
+    tzdata.initializeTimeZones();
+    tz.setLocalLocation(tz.getLocation('Asia/Ho_Chi_Minh'));
+    await _p.initialize(
+      const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      ),
+    );
+    final a = _p
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    await a?.requestNotificationsPermission();
+    if (!(await a?.canScheduleExactNotifications() ?? true)) {
+      await a?.requestExactAlarmsPermission();
+    }
+  }
+
+  static DateTimeComponents? _match(int repeat) {
+    switch (repeat) {
+      case 1:
+        return DateTimeComponents.time;
+      case 2:
+        return DateTimeComponents.dayOfWeekAndTime;
+      case 3:
+        return DateTimeComponents.dayOfMonthAndTime;
+      default:
+        return null;
+    }
+  }
+
+  /// ID thông báo = id sự kiện (ổn định, không trùng lặp).
+  static Future<void> schedule(Event e) async {
+    try {
+      await _p.cancel(e.id!);
+      if (e.reminderMin < 0) return;
+      var f = e.start.subtract(Duration(minutes: e.reminderMin));
+      final now = DateTime.now();
+      var guard = 0;
+      while (!f.isAfter(now) && e.repeat > 0 && guard++ < 20000) {
+        if (e.repeat == 1) {
+          f = f.add(const Duration(days: 1));
+        } else if (e.repeat == 2) {
+          f = f.add(const Duration(days: 7));
+        } else {
+          f = DateTime(f.year, f.month + 1, f.day, f.hour, f.minute);
+        }
+      }
+      if (!f.isAfter(now)) return;
+      final t = tz.TZDateTime(tz.local, f.year, f.month, f.day, f.hour, f.minute);
+      final a = _p
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      final exact = await a?.canScheduleExactNotifications() ?? false;
+      await _p.zonedSchedule(
+        e.id!,
+        e.title,
+        e.description.isEmpty ? 'Sắp đến giờ sự kiện' : e.description,
+        t,
+        _details,
+        androidScheduleMode: exact
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
+        matchDateTimeComponents: _match(e.repeat),
+      );
+    } catch (_) {
+      // Không để lỗi thông báo làm sập ứng dụng.
+    }
+  }
+
+  static Future<void> cancel(int id) async {
+    try {
+      await _p.cancel(id);
+    } catch (_) {}
+  }
+
+  static Future<void> rescheduleAll(List<Event> events) async {
+    for (final e in events) {
+      if (e.id != null) await schedule(e);
+    }
+  }
+}
