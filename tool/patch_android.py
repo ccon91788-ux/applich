@@ -53,3 +53,41 @@ for name in ("build.gradle.kts", "build.gradle"):
             print(line.strip())
     break
 print("Android patched")
+
+# --- Ép mọi plugin (subproject) dùng compileSdk 36 ---
+KTS_HOOK = """subprojects {
+    afterEvaluate {
+        val ext = extensions.findByName("android")
+        if (ext != null) {
+            val m = ext.javaClass.methods.firstOrNull {
+                it.name == "compileSdkVersion" && it.parameterTypes.size == 1 &&
+                    it.parameterTypes[0] == Int::class.javaPrimitiveType
+            }
+            m?.invoke(ext, %s)
+        }
+    }
+}
+
+""" % COMPILE_SDK
+GROOVY_HOOK = """subprojects {
+    afterEvaluate { p ->
+        if (p.hasProperty('android')) {
+            p.android.compileSdkVersion %s
+        }
+    }
+}
+
+""" % COMPILE_SDK
+
+for name, hook in (("build.gradle.kts", KTS_HOOK), ("build.gradle", GROOVY_HOOK)):
+    f = pathlib.Path("android") / name
+    if not f.exists():
+        continue
+    g = f.read_text(encoding="utf-8")
+    if "compileSdkVersion" not in g:
+        i = g.find("subprojects {")
+        # Phải đăng ký TRƯỚC khối evaluationDependsOn(":app")
+        g = (g[:i] + hook + g[i:]) if i >= 0 else (g + "\n" + hook)
+        f.write_text(g, encoding="utf-8")
+    print("root " + name + " patched")
+    break

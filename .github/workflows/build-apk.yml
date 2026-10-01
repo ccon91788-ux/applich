@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -29,7 +29,24 @@ jobs:
           dart format --set-exit-if-changed lib test
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
-      - run: flutter build apk --release
+      - name: Build APK
+        run: |
+          set -o pipefail
+          flutter build apk --release 2>&1 | tee build.log
+      - name: Tóm tắt lỗi build
+        if: failure()
+        run: |
+          {
+            echo '## Chi tiết lỗi build'
+            echo '```'
+            grep -n -B3 -A25 -E "What went wrong|FAILURE|Could not|error:" build.log | head -90
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: build.log
       - uses: actions/upload-artifact@v4
         with:
           name: LifeSync-release-apk
