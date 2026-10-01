@@ -1,6 +1,8 @@
-"""Vá thư mục android/ do `flutter create` sinh ra: quyền, receiver thông báo, desugaring."""
+"""Vá thư mục android/ do `flutter create` sinh ra: quyền, receiver thông báo, desugaring, compileSdk."""
 import pathlib
 import re
+
+COMPILE_SDK = "36"
 
 m = pathlib.Path("android/app/src/main/AndroidManifest.xml")
 s = m.read_text(encoding="utf-8")
@@ -31,14 +33,23 @@ for name in ("build.gradle.kts", "build.gradle"):
     if not f.exists():
         continue
     g = f.read_text(encoding="utf-8")
-    if "coreLibraryDesugaring" in g or "CoreLibraryDesugaring" in g:
-        break
-    if name.endswith(".kts"):
-        g = g.replace("compileOptions {", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", 1)
-        g += '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
-    else:
-        g = g.replace("compileOptions {", "compileOptions {\n        coreLibraryDesugaringEnabled true", 1)
-        g += "\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}\n"
+    # Nâng compileSdk (thư viện AndroidX mới yêu cầu 36+)
+    g = re.sub(
+        r"compileSdk(?:Version)?(\s*=\s*|\s+)flutter\.compileSdkVersion",
+        r"compileSdk\g<1>" + COMPILE_SDK,
+        g,
+    )
+    if "esugaring" not in g:
+        if name.endswith(".kts"):
+            g = g.replace("compileOptions {", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", 1)
+            g += '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+        else:
+            g = g.replace("compileOptions {", "compileOptions {\n        coreLibraryDesugaringEnabled true", 1)
+            g += "\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}\n"
     f.write_text(g, encoding="utf-8")
+    print("--- " + name)
+    for line in g.splitlines():
+        if "compileSdk" in line or "esugaring" in line:
+            print(line.strip())
     break
 print("Android patched")
