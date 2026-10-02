@@ -7,6 +7,7 @@ import 'data/repo.dart';
 import 'screens/analytics_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/finance_screen.dart';
+import 'services/update_service.dart';
 import 'ui.dart';
 
 final ValueNotifier<ThemeMode> themeMode = ValueNotifier(ThemeMode.system);
@@ -61,6 +62,17 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   int _i = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (await UpdateService.autoEnabled() && mounted) {
+        await UpdateService.check(context, silent: true);
+      }
+    });
+  }
+
   static const _pages = [CalendarScreen(), FinanceScreen(), AnalyticsScreen()];
 
   @override

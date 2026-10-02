@@ -35,3 +35,9 @@ Android 13+: cho phép thông báo khi được hỏi. Nếu chưa cấp quyền
 
 ## Lưu ý
 Múi giờ thông báo cố định Asia/Ho_Chi_Minh. APK release ký bằng khóa debug (đủ để cài thử).
+
+## Cập nhật app mà không cần gỡ bản cũ
+1. Tạo khóa ký cố định một lần (xem hướng dẫn trong cuộc trò chuyện) và lưu vào GitHub Secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`.
+2. Mỗi lần push, workflow ký APK bằng khóa đó và đánh số phiên bản tăng dần (`--build-number`).
+3. Tải bản mới nhất tại: `https://github.com/<tài-khoản>/<repo>/releases/latest/download/LifeSync.apk` rồi cài đè.
+Không làm mất khóa ký: mất khóa thì không thể cập nhật đè được nữa.

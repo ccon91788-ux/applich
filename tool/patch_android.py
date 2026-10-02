@@ -8,6 +8,7 @@ m = pathlib.Path("android/app/src/main/AndroidManifest.xml")
 s = m.read_text(encoding="utf-8")
 perms = (
     '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n'
+    '<uses-permission android:name="android.permission.INTERNET"/>\n'
     '<uses-permission android:name="android.permission.VIBRATE"/>\n'
     '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n'
     '<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>\n'
@@ -25,6 +26,12 @@ recv = (
 if "POST_NOTIFICATIONS" not in s:
     s = s.replace("<application", perms + "<application", 1)
     s = s.replace("</application>", recv + "</application>", 1)
+VIEW_INTENT = '<intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent>'
+if "android.scheme" not in s and 'android:scheme="https"' not in s:
+    if "</queries>" in s:
+        s = s.replace("</queries>", VIEW_INTENT + "</queries>", 1)
+    else:
+        s = s.replace("<application", "<queries>" + VIEW_INTENT + "</queries>\n<application", 1)
 s = re.sub(r'android:label="[^"]*"', 'android:label="LifeSync"', s, count=1)
 m.write_text(s, encoding="utf-8")
 
@@ -91,3 +98,46 @@ for name, hook in (("build.gradle.kts", KTS_HOOK), ("build.gradle", GROOVY_HOOK)
         f.write_text(g, encoding="utf-8")
     print("root " + name + " patched")
     break
+
+# --- Ký bản release bằng khóa cố định (nếu workflow đã tạo android/key.properties) ---
+if pathlib.Path("android/key.properties").exists():
+    KTS_SIGN = """    signingConfigs {
+        create("release") {
+            val p = java.util.Properties()
+            p.load(java.io.FileInputStream(rootProject.file("key.properties")))
+            keyAlias = p["keyAlias"] as String
+            keyPassword = p["keyPassword"] as String
+            storeFile = file(p["storeFile"] as String)
+            storePassword = p["storePassword"] as String
+        }
+    }
+"""
+    GROOVY_SIGN = """    signingConfigs {
+        release {
+            def p = new Properties()
+            p.load(new FileInputStream(rootProject.file("key.properties")))
+            keyAlias p['keyAlias']
+            keyPassword p['keyPassword']
+            storeFile file(p['storeFile'])
+            storePassword p['storePassword']
+        }
+    }
+"""
+    for name, block in (("build.gradle.kts", KTS_SIGN), ("build.gradle", GROOVY_SIGN)):
+        f = pathlib.Path("android/app") / name
+        if not f.exists():
+            continue
+        g = f.read_text(encoding="utf-8")
+        if "signingConfigs {" not in g:
+            g = g.replace("buildTypes {", block + "\n    buildTypes {", 1)
+        g = g.replace('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")')
+        g = g.replace("signingConfigs.debug", "signingConfigs.release")
+        if "import java.io.FileInputStream" not in g and name == "build.gradle":
+            g = "import java.io.FileInputStream\n" + g
+        f.write_text(g, encoding="utf-8")
+        print("release signing configured in " + name)
+        break
+else:
+    pass
+if not pathlib.Path("android/key.properties").exists():
+    print("WARNING: no release key, APK will use a temporary debug key")

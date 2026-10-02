@@ -13,6 +13,7 @@ import '../data/repo.dart';
 import '../main.dart' show themeMode, showLunar;
 import '../services/backup_service.dart';
 import '../services/csv_service.dart';
+import '../services/update_service.dart';
 import '../ui.dart';
 import '../utils.dart';
 
@@ -31,6 +32,15 @@ class AnalyticsScreen extends StatefulWidget {
 class _AnalyticsState extends State<AnalyticsScreen> {
   int r = 0;
   DateTimeRange? custom;
+  bool autoUpd = true;
+
+  @override
+  void initState() {
+    super.initState();
+    UpdateService.autoEnabled().then((v) {
+      if (mounted) setState(() => autoUpd = v);
+    });
+  }
   static const _rl = ['Tháng này', 'Tháng trước', '3 tháng', '6 tháng', 'Năm nay', 'Tùy chọn'];
 
   (DateTime, DateTime) _range() {
@@ -437,6 +447,21 @@ class _AnalyticsState extends State<AnalyticsScreen> {
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: [
+                      SwitchListTile(
+                        secondary: const Badge3D('🔄', size: 40, color: 2),
+                        title: const Text('Tự kiểm tra cập nhật khi mở app'),
+                        subtitle: Text(kBuild == 0 ? 'Bản thử nghiệm' : 'Phiên bản hiện tại: build $kBuild'),
+                        value: autoUpd,
+                        onChanged: (v) async {
+                          setState(() => autoUpd = v);
+                          await UpdateService.setAutoEnabled(v);
+                        },
+                      ),
+                      ListTile(
+                        leading: const Badge3D('⬆️', size: 40, color: 2),
+                        title: const Text('Kiểm tra cập nhật ngay'),
+                        onTap: () => UpdateService.check(context),
+                      ),
                       ListTile(
                         leading: const Badge3D('📤', size: 40),
                         title: const Text('Xuất sao lưu (JSON)'),
