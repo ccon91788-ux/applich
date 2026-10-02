@@ -7,17 +7,22 @@ import 'data/repo.dart';
 import 'screens/analytics_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/finance_screen.dart';
+import 'ui.dart';
 
 final ValueNotifier<ThemeMode> themeMode = ValueNotifier(ThemeMode.system);
+final ValueNotifier<bool> showLunar = ValueNotifier(true);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('vi');
-  final sp = await SharedPreferences.getInstance();
-  themeMode.value = ThemeMode.values[(sp.getInt('theme') ?? 0).clamp(0, 2)];
+  try {
+    final sp = await SharedPreferences.getInstance();
+    themeMode.value = ThemeMode.values[(sp.getInt('theme') ?? 0).clamp(0, 2)];
+    showLunar.value = sp.getBool('lunar') ?? true;
+  } catch (_) {}
   try {
     await Notif.init();
-    await Notif.rescheduleAll(await Repo.events());
+    await Notif.rescheduleAll(await Repo.events(), await Repo.bills());
   } catch (_) {}
   runApp(const LifeSyncApp());
 }
@@ -33,12 +38,8 @@ class LifeSyncApp extends StatelessWidget {
         title: 'LifeSync',
         debugShowCheckedModeBanner: false,
         themeMode: mode,
-        theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal),
-        darkTheme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: Colors.teal,
-          brightness: Brightness.dark,
-        ),
+        theme: buildTheme(Brightness.light),
+        darkTheme: buildTheme(Brightness.dark),
         locale: const Locale('vi'),
         supportedLocales: const [Locale('vi')],
         localizationsDelegates: const [
@@ -65,14 +66,14 @@ class _ShellState extends State<Shell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _i, children: _pages),
+      body: SafeArea(bottom: false, child: IndexedStack(index: _i, children: _pages)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _i,
         onDestinationSelected: (v) => setState(() => _i = v),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.calendar_month), label: 'Lịch'),
-          NavigationDestination(icon: Icon(Icons.account_balance_wallet), label: 'Tài chính'),
-          NavigationDestination(icon: Icon(Icons.insights), label: 'Thống kê'),
+          NavigationDestination(icon: Text('🗓️', style: TextStyle(fontSize: 22)), label: 'Lịch'),
+          NavigationDestination(icon: Text('👛', style: TextStyle(fontSize: 22)), label: 'Tài chính'),
+          NavigationDestination(icon: Text('📊', style: TextStyle(fontSize: 22)), label: 'Thống kê'),
         ],
       ),
     );

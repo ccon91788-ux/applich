@@ -4,12 +4,57 @@ import 'package:intl/intl.dart';
 import '../data/models.dart';
 import '../data/repo.dart';
 import '../services/quick_input_service.dart';
+import '../ui.dart';
 import '../utils.dart';
+import 'finance_extras.dart';
 
 class FinanceScreen extends StatelessWidget {
   const FinanceScreen({super.key});
 
-  Future<void> _quick(BuildContext context) async {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Tài chính'),
+          bottom: TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            dividerColor: Colors.transparent,
+            indicatorSize: TabBarIndicatorSize.tab,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w800),
+            indicator: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            tabs: const [
+              Tab(text: 'Giao dịch'),
+              Tab(text: 'Ngân sách'),
+              Tab(text: 'Hóa đơn'),
+              Tab(text: 'Tiết kiệm'),
+            ],
+          ),
+        ),
+        body: const TabBarView(
+          children: [TxnTab(), BudgetTab(), BillsTab(), GoalsTab()],
+        ),
+      ),
+    );
+  }
+}
+
+class TxnTab extends StatefulWidget {
+  const TxnTab({super.key});
+  @override
+  State<TxnTab> createState() => _TxnTabState();
+}
+
+class _TxnTabState extends State<TxnTab> {
+  String q = '';
+
+  Future<void> _quick() async {
     final ctl = TextEditingController();
     final text = await showDialog<String>(
       context: context,
@@ -26,7 +71,8 @@ class FinanceScreen extends StatelessWidget {
         ],
       ),
     );
-    if (text == null || text.trim().isEmpty || !context.mounted) return;
+    ctl.dispose();
+    if (text == null || text.trim().isEmpty || !mounted) return;
     final r = parseQuick(text);
     // Luôn hiển thị màn hình xác nhận, không tự lưu.
     Navigator.push(
@@ -47,75 +93,165 @@ class FinanceScreen extends StatelessWidget {
     );
   }
 
+  Widget _pill(String label, int v) => Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.white.withAlpha(50),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            fmtMoney(v),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tài chính'),
-        actions: [
-          IconButton(tooltip: 'Nhập nhanh', icon: const Icon(Icons.bolt), onPressed: () => _quick(context)),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TxnForm())),
         icon: const Icon(Icons.add),
         label: const Text('Giao dịch'),
       ),
-      body: ValueListenableBuilder<int>(
-        valueListenable: dataTick,
-        builder: (context, _, __) => FutureBuilder<List<Txn>>(
-          future: Repo.txns(),
-          builder: (context, snap) {
-            final list = snap.data ?? <Txn>[];
-            final inc = list.where((t) => t.isIncome).fold<int>(0, (a, t) => a + t.amount);
-            final exp = list.where((t) => !t.isIncome).fold<int>(0, (a, t) => a + t.amount);
-            return ListView(
-              padding: const EdgeInsets.only(bottom: 88),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Row(
               children: [
-                Card(
-                  margin: const EdgeInsets.all(16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Số dư'),
-                        Text(fmtMoney(inc - exp), style: Theme.of(context).textTheme.headlineSmall),
-                        const SizedBox(height: 8),
-                        Text('Thu: ${fmtMoney(inc)}'),
-                        Text('Chi: ${fmtMoney(exp)}'),
-                      ],
+                Expanded(
+                  child: TextField(
+                    onChanged: (v) => setState(() => q = v),
+                    decoration: const InputDecoration(
+                      hintText: 'Tìm giao dịch...',
+                      prefixIcon: Icon(Icons.search),
                     ),
                   ),
                 ),
-                if (list.isEmpty)
-                  const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('Chưa có giao dịch nào'))),
-                for (final t in list)
-                  ListTile(
-                    leading: Icon(t.isIncome ? Icons.arrow_downward : Icons.arrow_upward),
-                    title: Text(t.category, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(
-                      '${DateFormat('dd/MM/yyyy').format(t.date)}${t.note.isEmpty ? '' : ' • ${t.note}'}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('${t.isIncome ? '+' : '-'}${fmtMoney(t.amount)}'),
-                        IconButton(
-                          tooltip: 'Xóa giao dịch',
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => Repo.deleteTxn(t),
-                        ),
-                      ],
-                    ),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TxnForm(initial: t))),
-                  ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: 'Nhập nhanh',
+                  icon: const Icon(Icons.bolt),
+                  onPressed: _quick,
+                ),
               ],
-            );
-          },
-        ),
+            ),
+          ),
+          Expanded(
+            child: ValueListenableBuilder<int>(
+              valueListenable: dataTick,
+              builder: (context, _, __) => FutureBuilder<List<Txn>>(
+                future: Repo.txns(),
+                builder: (context, snap) {
+                  final all = snap.data ?? <Txn>[];
+                  final inc = all.where((t) => t.isIncome).fold<int>(0, (a, t) => a + t.amount);
+                  final exp = all.where((t) => !t.isIncome).fold<int>(0, (a, t) => a + t.amount);
+                  final ql = q.trim().toLowerCase();
+                  final list = all
+                      .where((t) =>
+                          ql.isEmpty ||
+                          t.category.toLowerCase().contains(ql) ||
+                          t.note.toLowerCase().contains(ql))
+                      .toList();
+                  return ListView(
+                    padding: const EdgeInsets.only(bottom: 96),
+                    children: [
+                      SoftCard(
+                        gradient: heroGradient(context),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Số dư', style: TextStyle(color: Colors.white70)),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                fmtMoney(inc - exp),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(child: _pill('⬇️ Thu', inc)),
+                                const SizedBox(width: 10),
+                                Expanded(child: _pill('⬆️ Chi', exp)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (list.isEmpty)
+                        EmptyState('🐷', all.isEmpty ? 'Chưa có giao dịch nào' : 'Không tìm thấy giao dịch'),
+                      for (final t in list)
+                        SoftCard(
+                          padding: const EdgeInsets.all(12),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => TxnForm(initial: t)),
+                          ),
+                          child: Row(
+                            children: [
+                              Badge3D(catEmoji(t.category), color: t.category.length),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(t.category, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                                    Text(
+                                      '${DateFormat('dd/MM/yyyy').format(t.date)}${t.note.isEmpty ? '' : ' • ${t.note}'}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '${t.isIncome ? '+' : '-'}${fmtMoney(t.amount)}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      color: t.isIncome ? const Color(0xFF2E9E6B) : const Color(0xFFE0556F),
+                                    ),
+                                  ),
+                                  InkWell(
+                                    onTap: () => Repo.deleteTxn(t),
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(4),
+                                      child: Icon(Icons.delete_outline, size: 20, semanticLabel: 'Xóa giao dịch'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -188,11 +324,9 @@ class _TxnFormState extends State<TxnForm> {
         padding: const EdgeInsets.all(16),
         children: [
           if (widget.uncertain)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('Chưa chắc chắn về kết quả phân tích. Vui lòng kiểm tra lại trước khi lưu.'),
-              ),
+            const SoftCard(
+              margin: EdgeInsets.only(bottom: 12),
+              child: Text('⚠️ Chưa chắc chắn về kết quả phân tích. Vui lòng kiểm tra lại trước khi lưu.'),
             ),
           SegmentedButton<bool>(
             segments: const [
@@ -207,25 +341,48 @@ class _TxnFormState extends State<TxnForm> {
             controller: _amount,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(labelText: 'Số tiền (₫)', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: 'Số tiền (₫)'),
           ),
           const SizedBox(height: 12),
-          TextField(controller: _cat, decoration: const InputDecoration(labelText: 'Danh mục (có thể tự nhập)', border: OutlineInputBorder())),
+          TextField(
+            controller: _cat,
+            decoration: const InputDecoration(labelText: 'Danh mục (có thể tự nhập)'),
+          ),
+          const SizedBox(height: 6),
           Wrap(
             spacing: 8,
-            children: [for (final c in cats) ActionChip(label: Text(c), onPressed: () => setState(() => _cat.text = c))],
+            children: [
+              for (final c in cats)
+                ActionChip(
+                  avatar: Text(catEmoji(c)),
+                  label: Text(c),
+                  onPressed: () => setState(() => _cat.text = c),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
-          TextField(controller: _note, decoration: const InputDecoration(labelText: 'Ghi chú', border: OutlineInputBorder())),
-          ListTile(
-            leading: const Icon(Icons.event),
-            title: Text(DateFormat('dd/MM/yyyy').format(date)),
+          TextField(controller: _note, decoration: const InputDecoration(labelText: 'Ghi chú')),
+          SoftCard(
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             onTap: () async {
-              final d = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2000), lastDate: DateTime(2100));
+              final d = await showDatePicker(
+                context: context,
+                initialDate: date,
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+              );
               if (d != null) setState(() => date = d);
             },
+            child: Row(
+              children: [
+                const Badge3D('📅', size: 38),
+                const SizedBox(width: 12),
+                Text(DateFormat('dd/MM/yyyy').format(date), style: const TextStyle(fontWeight: FontWeight.w600)),
+              ],
+            ),
           ),
-          FilledButton.icon(onPressed: _save, icon: const Icon(Icons.save), label: const Text('Lưu')),
+          FilledButton.icon(onPressed: _save, icon: const Icon(Icons.check), label: const Text('Lưu giao dịch')),
         ],
       ),
     );

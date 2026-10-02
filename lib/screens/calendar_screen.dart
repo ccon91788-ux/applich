@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data/models.dart';
 import '../data/repo.dart';
+import '../main.dart' show showLunar;
+import '../services/finance_logic.dart';
+import '../services/lunar_service.dart';
+import '../ui.dart';
 import '../utils.dart';
 
 const reminderLabels = {
@@ -14,7 +18,22 @@ const reminderLabels = {
   60: 'Trước 1 giờ',
   1440: 'Trước 1 ngày',
 };
-const repeatLabels = {0: 'Không lặp', 1: 'Mỗi ngày', 2: 'Mỗi tuần', 3: 'Mỗi tháng'};
+const repeatLabels = {
+  0: 'Không lặp',
+  1: 'Mỗi ngày',
+  2: 'Mỗi tuần',
+  3: 'Mỗi tháng',
+  4: 'Mỗi năm',
+};
+
+bool _same(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// Hóa đơn hiển thị vào đúng ngày đến hạn mỗi tháng, từ tháng của kỳ kế tiếp.
+bool _billOn(Bill b, DateTime d) =>
+    b.enabled &&
+    !d.isBefore(DateTime(b.nextDue.year, b.nextDue.month, 1)) &&
+    _same(d, billDue(d.year, d.month, b.dueDay));
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -23,22 +42,35 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarState extends State<CalendarScreen> {
-  late DateTime month;
+  int mode = 0; // 0 tháng, 1 tuần, 2 ngày
   late DateTime sel;
 
   @override
   void initState() {
     super.initState();
-    _go(DateTime.now(), notify: false);
+    final n = DateTime.now();
+    sel = DateTime(n.year, n.month, n.day);
   }
 
-  void _go(DateTime d, {bool notify = true}) {
-    void f() {
-      sel = DateTime(d.year, d.month, d.day);
-      month = DateTime(d.year, d.month);
-    }
+  void _shift(int dir) {
+    setState(() {
+      if (mode == 0) {
+        final last = DateTime(sel.year, sel.month + dir + 1, 0).day;
+        sel = DateTime(sel.year, sel.month + dir, sel.day > last ? last : sel.day);
+      } else if (mode == 1) {
+        sel = DateTime(sel.year, sel.month, sel.day + 7 * dir);
+      } else {
+        sel = DateTime(sel.year, sel.month, sel.day + dir);
+      }
+    });
+  }
 
-    notify ? setState(f) : f();
+  String _title() {
+    if (mode == 0) return DateFormat('MMMM yyyy', 'vi').format(sel);
+    if (mode == 2) return DateFormat('EEEE, dd/MM/yyyy', 'vi').format(sel);
+    final s = DateTime(sel.year, sel.month, sel.day - (sel.weekday - 1));
+    final e = DateTime(s.year, s.month, s.day + 6);
+    return '${DateFormat('dd/MM').format(s)} – ${DateFormat('dd/MM/yyyy').format(e)}';
   }
 
   @override
@@ -50,7 +82,10 @@ class _CalendarState extends State<CalendarScreen> {
           IconButton(
             tooltip: 'Hôm nay',
             icon: const Icon(Icons.today),
-            onPressed: () => _go(DateTime.now()),
+            onPressed: () {
+              final n = DateTime.now();
+              setState(() => sel = DateTime(n.year, n.month, n.day));
+            },
           ),
           IconButton(
             tooltip: 'Chọn ngày',
@@ -62,7 +97,7 @@ class _CalendarState extends State<CalendarScreen> {
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2100),
               );
-              if (d != null) _go(d);
+              if (d != null) setState(() => sel = DateTime(d.year, d.month, d.day));
             },
           ),
         ],
@@ -77,54 +112,22 @@ class _CalendarState extends State<CalendarScreen> {
       ),
       body: ValueListenableBuilder<int>(
         valueListenable: dataTick,
-        builder: (context, _, __) => FutureBuilder<List<Event>>(
-          future: Repo.events(),
+        builder: (context, _, __) =>
+            FutureBuilder<({List<Event> events, List<Bill> bills})>(
+          future: Repo.calendarData(),
           builder: (context, snap) {
-            final evs = snap.data ?? <Event>[];
-            final day = evs.where((e) => e.occursOn(sel)).toList()
-              ..sort((a, b) => (a.start.hour * 60 + a.start.minute)
-                  .compareTo(b.start.hour * 60 + b.start.minute));
-            return ListView(
-              padding: const EdgeInsets.only(bottom: 88),
-              children: [
-                _header(),
-                _grid(evs),
-                const Divider(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Text(
-                    DateFormat('EEEE, dd/MM/yyyy', 'vi').format(sel),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                if (day.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: Text('Không có sự kiện trong ngày này')),
-                  ),
-                for (final e in day)
-                  ListTile(
-                    leading: Text(DateFormat('HH:mm').format(e.start)),
-                    title: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(
-                      [
-                        if (e.description.isNotEmpty) e.description,
-                        repeatLabels[e.repeat] ?? '',
-                      ].join(' • '),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => EventForm(ev: e)),
-                    ),
-                    trailing: IconButton(
-                      tooltip: 'Xóa sự kiện',
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => Repo.deleteEvent(e),
-                    ),
-                  ),
-              ],
+            final events = snap.data?.events ?? <Event>[];
+            final bills = snap.data?.bills ?? <Bill>[];
+            return ValueListenableBuilder<bool>(
+              valueListenable: showLunar,
+              builder: (context, lunar, _) => ListView(
+                padding: const EdgeInsets.only(bottom: 96),
+                children: [
+                  _hero(lunar),
+                  if (mode == 0) _monthGrid(events, bills, lunar),
+                  ..._body(events, bills, lunar),
+                ],
+              ),
             );
           },
         ),
@@ -132,83 +135,287 @@ class _CalendarState extends State<CalendarScreen> {
     );
   }
 
-  Widget _header() => Row(
-    children: [
-      IconButton(
-        tooltip: 'Tháng trước',
-        icon: const Icon(Icons.chevron_left),
-        onPressed: () => setState(() => month = DateTime(month.year, month.month - 1)),
-      ),
-      Expanded(
-        child: Center(
-          child: Text(
-            DateFormat('MMMM yyyy', 'vi').format(month),
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-        ),
-      ),
-      IconButton(
-        tooltip: 'Tháng sau',
-        icon: const Icon(Icons.chevron_right),
-        onPressed: () => setState(() => month = DateTime(month.year, month.month + 1)),
-      ),
-    ],
-  );
-
-  Widget _grid(List<Event> evs) {
-    final cs = Theme.of(context).colorScheme;
-    final today = DateTime.now();
-    final offset = DateTime(month.year, month.month, 1).weekday - 1;
-    final days = DateTime(month.year, month.month + 1, 0).day;
-    final cells = <Widget>[];
-    for (var i = 0; i < offset; i++) {
-      cells.add(const SizedBox.shrink());
-    }
-    for (var d = 1; d <= days; d++) {
-      final date = DateTime(month.year, month.month, d);
-      final isSel = date == sel;
-      final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
-      final has = evs.any((e) => e.occursOn(date));
-      cells.add(
-        InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => setState(() => sel = date),
-          child: Container(
-            margin: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: isSel ? cs.primaryContainer : null,
-              border: isToday ? Border.all(color: cs.primary, width: 2) : null,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: FittedBox(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('$d', style: TextStyle(fontWeight: isToday ? FontWeight.bold : null)),
-                  Icon(Icons.circle, size: 6, color: has ? cs.primary : Colors.transparent),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+  Widget _hero(bool lunar) {
+    const w = Colors.white;
+    return SoftCard(
+      gradient: heroGradient(context),
       child: Column(
         children: [
           Row(
             children: [
-              for (final w in ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'])
-                Expanded(child: Center(child: Text(w))),
+              IconButton(
+                tooltip: 'Trước',
+                color: w,
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => _shift(-1),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      _title(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: w, fontSize: 20, fontWeight: FontWeight.w800),
+                    ),
+                    if (lunar)
+                      Text(
+                        LunarService.toLunar(sel).label,
+                        style: TextStyle(color: w.withAlpha(225), fontSize: 13),
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Sau',
+                color: w,
+                icon: const Icon(Icons.chevron_right),
+                onPressed: () => _shift(1),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 0, label: Text('Tháng')),
+              ButtonSegment(value: 1, label: Text('Tuần')),
+              ButtonSegment(value: 2, label: Text('Ngày')),
+            ],
+            selected: {mode},
+            onSelectionChanged: (s) => setState(() => mode = s.first),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dot(Color c) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 1),
+    child: Icon(Icons.circle, size: 6, color: c),
+  );
+
+  Widget _monthGrid(List<Event> evs, List<Bill> bills, bool lunar) {
+    final offset = DateTime(sel.year, sel.month, 1).weekday - 1;
+    final days = DateTime(sel.year, sel.month + 1, 0).day;
+    final cells = <Widget>[
+      for (var i = 0; i < offset; i++) const SizedBox.shrink(),
+      for (var d = 1; d <= days; d++)
+        _cell(DateTime(sel.year, sel.month, d), evs, bills, lunar),
+    ];
+    return SoftCard(
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              for (final w in const ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'])
+                Expanded(
+                  child: Center(
+                    child: Text(w, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
             ],
           ),
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: 7,
+            childAspectRatio: lunar ? 0.74 : 1.0,
             children: cells,
           ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Wrap(
+              spacing: 12,
+              children: [
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  _dot(pastelStrong(0)),
+                  const Text(' Sự kiện', style: TextStyle(fontSize: 12)),
+                ]),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  _dot(pastelStrong(3)),
+                  const Text(' Hóa đơn', style: TextStyle(fontSize: 12)),
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cell(DateTime date, List<Event> evs, List<Bill> bills, bool lunar) {
+    final cs = Theme.of(context).colorScheme;
+    final isSel = _same(date, sel);
+    final isToday = _same(date, DateTime.now());
+    final hasEv = evs.any((e) => e.occursOn(date));
+    final hasBill = bills.any((b) => _billOn(b, date));
+    final fg = isSel ? cs.onPrimary : cs.onSurface;
+    return Semantics(
+      button: true,
+      label: 'Ngày ${date.day} tháng ${date.month}',
+      child: GestureDetector(
+        onTap: () => setState(() => sel = date),
+        child: Container(
+          margin: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: isSel
+                ? cs.primary
+                : (isToday ? cs.primaryContainer : cs.surfaceContainerHighest.withAlpha(70)),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${date.day}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: (isToday || isSel) ? FontWeight.w800 : FontWeight.w600,
+                      color: fg,
+                    ),
+                  ),
+                  if (lunar)
+                    Text(
+                      LunarService.toLunar(date).short,
+                      style: TextStyle(fontSize: 10, color: fg.withAlpha(190)),
+                    ),
+                  SizedBox(
+                    height: 8,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (hasEv) _dot(isSel ? Colors.white : pastelStrong(0)),
+                        if (hasBill) _dot(isSel ? Colors.white : pastelStrong(3)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _body(List<Event> evs, List<Bill> bills, bool lunar) {
+    if (mode != 1) {
+      return [
+        if (mode == 0)
+          SectionTitle(DateFormat('EEEE, dd/MM/yyyy', 'vi').format(sel)),
+        ..._dayWidgets(sel, evs, bills),
+      ];
+    }
+    final start = DateTime(sel.year, sel.month, sel.day - (sel.weekday - 1));
+    final out = <Widget>[];
+    for (var i = 0; i < 7; i++) {
+      final d = DateTime(start.year, start.month, start.day + i);
+      final isToday = _same(d, DateTime.now());
+      var label = DateFormat('EEEE dd/MM', 'vi').format(d);
+      if (lunar) label += '  ·  ${LunarService.toLunar(d).label}';
+      out.add(
+        InkWell(
+          onTap: () => setState(() {
+            sel = d;
+            mode = 2;
+          }),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: isToday ? Theme.of(context).colorScheme.primary : null,
+              ),
+            ),
+          ),
+        ),
+      );
+      final items = _dayWidgets(d, evs, bills, showEmpty: false);
+      out.addAll(
+        items.isEmpty
+            ? [const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text('Trống'))]
+            : items,
+      );
+    }
+    return out;
+  }
+
+  List<Widget> _dayWidgets(DateTime d, List<Event> evs, List<Bill> bills, {bool showEmpty = true}) {
+    final list = evs.where((e) => e.occursOn(d)).toList()
+      ..sort((a, b) => (a.start.hour * 60 + a.start.minute)
+          .compareTo(b.start.hour * 60 + b.start.minute));
+    final bs = bills.where((b) => _billOn(b, d)).toList();
+    if (list.isEmpty && bs.isEmpty) {
+      return showEmpty ? [const EmptyState('🌤️', 'Không có sự kiện trong ngày này')] : [];
+    }
+    return [for (final e in list) _eventTile(e), for (final b in bs) _billTile(b, d)];
+  }
+
+  Widget _eventTile(Event e) {
+    final t = DateFormat('HH:mm');
+    final range = e.end == null ? t.format(e.start) : '${t.format(e.start)} – ${t.format(e.end!)}';
+    return SoftCard(
+      padding: const EdgeInsets.all(12),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => EventForm(ev: e))),
+      child: Row(
+        children: [
+          Badge3D('🗓️', color: e.id ?? 0),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text('$range • ${repeatLabels[e.repeat] ?? ''}', style: const TextStyle(fontSize: 12)),
+                if (e.description.isNotEmpty)
+                  Text(e.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Xóa sự kiện',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () => Repo.deleteEvent(e),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _billTile(Bill b, DateTime d) {
+    final due = _same(d, b.nextDue);
+    return SoftCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          const Badge3D('🧾', color: 3),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(b.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text('${fmtMoney(b.amount)} • Hóa đơn đến hạn', style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+          if (due)
+            FilledButton.tonal(
+              onPressed: () async {
+                final ok = await Repo.payBill(b.id!);
+                if (mounted) {
+                  toast(context, ok ? 'Đã ghi nhận thanh toán.' : 'Kỳ này đã được thanh toán.');
+                }
+              },
+              child: const Text('Đã trả'),
+            ),
         ],
       ),
     );
@@ -228,6 +435,7 @@ class _EventFormState extends State<EventForm> {
   final _desc = TextEditingController();
   late DateTime date;
   late TimeOfDay time;
+  TimeOfDay? endTime;
   int rem = 10;
   int rep = 0;
 
@@ -240,6 +448,7 @@ class _EventFormState extends State<EventForm> {
       _desc.text = e.description;
       date = DateTime(e.start.year, e.start.month, e.start.day);
       time = TimeOfDay(hour: e.start.hour, minute: e.start.minute);
+      if (e.end != null) endTime = TimeOfDay(hour: e.end!.hour, minute: e.end!.minute);
       rem = e.reminderMin;
       rep = e.repeat;
     } else {
@@ -261,10 +470,20 @@ class _EventFormState extends State<EventForm> {
       toast(context, 'Vui lòng nhập tiêu đề.');
       return;
     }
-    final e = widget.ev ?? Event(title: '', start: date);
+    final start = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    DateTime? end;
+    if (endTime != null) {
+      end = DateTime(date.year, date.month, date.day, endTime!.hour, endTime!.minute);
+      if (!end.isAfter(start)) {
+        toast(context, 'Giờ kết thúc phải sau giờ bắt đầu.');
+        return;
+      }
+    }
+    final e = widget.ev ?? Event(title: '', start: start);
     e.title = _title.text.trim();
     e.description = _desc.text.trim();
-    e.start = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    e.start = start;
+    e.end = end;
     e.reminderMin = rem;
     e.repeat = rep;
     try {
@@ -275,6 +494,21 @@ class _EventFormState extends State<EventForm> {
     }
   }
 
+  Widget _pick(String emoji, String text, VoidCallback onTap, {VoidCallback? onClear}) => SoftCard(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    margin: const EdgeInsets.symmetric(vertical: 5),
+    onTap: onTap,
+    child: Row(
+      children: [
+        Badge3D(emoji, size: 38),
+        const SizedBox(width: 12),
+        Expanded(child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600))),
+        if (onClear != null)
+          IconButton(tooltip: 'Bỏ', icon: const Icon(Icons.close), onPressed: onClear),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -282,40 +516,48 @@ class _EventFormState extends State<EventForm> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(controller: _title, decoration: const InputDecoration(labelText: 'Tiêu đề', border: OutlineInputBorder())),
+          TextField(controller: _title, decoration: const InputDecoration(labelText: 'Tiêu đề')),
           const SizedBox(height: 12),
-          TextField(controller: _desc, maxLines: 3, decoration: const InputDecoration(labelText: 'Chi tiết', border: OutlineInputBorder())),
-          ListTile(
-            leading: const Icon(Icons.event),
-            title: Text(DateFormat('dd/MM/yyyy').format(date)),
-            onTap: () async {
-              final d = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2000), lastDate: DateTime(2100));
-              if (d != null) setState(() => date = d);
+          TextField(controller: _desc, maxLines: 3, decoration: const InputDecoration(labelText: 'Chi tiết')),
+          const SizedBox(height: 8),
+          _pick('📅', DateFormat('EEEE, dd/MM/yyyy', 'vi').format(date), () async {
+            final d = await showDatePicker(
+              context: context,
+              initialDate: date,
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2100),
+            );
+            if (d != null) setState(() => date = d);
+          }),
+          _pick('⏰', 'Bắt đầu: ${time.format(context)}', () async {
+            final t = await showTimePicker(context: context, initialTime: time);
+            if (t != null) setState(() => time = t);
+          }),
+          _pick(
+            '🏁',
+            endTime == null ? 'Giờ kết thúc (không bắt buộc)' : 'Kết thúc: ${endTime!.format(context)}',
+            () async {
+              final t = await showTimePicker(context: context, initialTime: endTime ?? time);
+              if (t != null) setState(() => endTime = t);
             },
+            onClear: endTime == null ? null : () => setState(() => endTime = null),
           ),
-          ListTile(
-            leading: const Icon(Icons.access_time),
-            title: Text(time.format(context)),
-            onTap: () async {
-              final t = await showTimePicker(context: context, initialTime: time);
-              if (t != null) setState(() => time = t);
-            },
-          ),
+          const SizedBox(height: 8),
           DropdownButtonFormField<int>(
             value: rem,
-            decoration: const InputDecoration(labelText: 'Nhắc nhở', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: 'Nhắc nhở'),
             items: [for (final e in reminderLabels.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
             onChanged: (v) => setState(() => rem = v ?? rem),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             value: rep,
-            decoration: const InputDecoration(labelText: 'Lặp lại', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: 'Lặp lại'),
             items: [for (final e in repeatLabels.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
             onChanged: (v) => setState(() => rep = v ?? rep),
           ),
           const SizedBox(height: 20),
-          FilledButton.icon(onPressed: _save, icon: const Icon(Icons.save), label: const Text('Lưu')),
+          FilledButton.icon(onPressed: _save, icon: const Icon(Icons.check), label: const Text('Lưu sự kiện')),
         ],
       ),
     );

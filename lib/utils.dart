@@ -11,3 +11,20 @@ const expenseCats = [
   'Ăn uống', 'Di chuyển', 'Giáo dục', 'Mua sắm',
   'Giải trí', 'Hóa đơn', 'Sức khỏe', 'Chi tiêu khác',
 ];
+
+const _catEmoji = <String, String>{
+  'Lương': '💼',
+  'Trợ cấp': '🎁',
+  'Kinh doanh': '🏪',
+  'Thu nhập khác': '💰',
+  'Ăn uống': '🍜',
+  'Di chuyển': '🛵',
+  'Giáo dục': '📚',
+  'Mua sắm': '🛍️',
+  'Giải trí': '🎮',
+  'Hóa đơn': '🧾',
+  'Sức khỏe': '💊',
+  'Chi tiêu khác': '🧺',
+};
+
+String catEmoji(String c) => _catEmoji[c] ?? '🏷️';

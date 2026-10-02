@@ -2,16 +2,19 @@
 
 Ứng dụng Flutter/Android, dữ liệu lưu cục bộ bằng SQLite, không cần tài khoản hay Internet.
 
-## Tính năng đã có
-- Lịch tháng, nút Hôm nay, nhảy tới ngày, chấm đánh dấu ngày có sự kiện
-- Sự kiện: tiêu đề, chi tiết, giờ, nhắc trước (đúng giờ … 1 ngày), lặp ngày/tuần/tháng (lặp thật), thông báo có âm thanh + rung
-- Thu/chi, danh mục tự nhập, tiền lưu số nguyên VND, định dạng `50,000 ₫`
-- Nhập nhanh tiếng Việt (`Chi 50k ăn sáng`, `Thu 8tr lương`) – luôn có màn hình xác nhận
-- Thống kê: biểu đồ tròn theo danh mục, cột thu/chi, lọc theo thời gian
-- Sao lưu/khôi phục JSON (có kiểm tra hợp lệ), xuất CSV UTF-8, giao diện sáng/tối/hệ thống
+## Tính năng
+- **Lịch**: xem tháng / tuần / ngày, Hôm nay, nhảy tới ngày, lịch âm (bật/tắt), sự kiện có giờ bắt đầu - kết thúc, nhắc trước (đúng giờ … 1 ngày), lặp ngày/tuần/tháng/năm (lặp thật), thông báo âm thanh + rung
+- **Tài chính**: thu/chi, danh mục tự nhập, tiền lưu số nguyên VND (`50,000 ₫`), tìm kiếm, Nhập nhanh tiếng Việt (luôn có màn hình xác nhận)
+- **Ngân sách tháng**: thanh tiến độ, còn lại, cảnh báo 80/90/100% (mỗi mức một lần mỗi tháng), bật/tắt, đặt lại
+- **Hóa đơn định kỳ**: hiện trên lịch, nhắc 8:00 ngày đến hạn, "Đã thanh toán" tự tạo giao dịch chi + dời sang tháng sau, chống trả trùng một kỳ
+- **Mục tiêu tiết kiệm**: thanh tiến độ %, thêm/rút tiền, sửa/xóa, hạn chót và số tiền cần để dành mỗi tháng
+- **Thống kê**: tổng thu/chi/số dư/tiết kiệm, biểu đồ tròn theo danh mục, cột thu-chi, xu hướng 6 tháng, lọc tháng này/trước/3/6 tháng/năm nay/tùy chọn
+- Sao lưu/khôi phục JSON (phiên bản 2, vẫn nhập được bản 1), xuất CSV UTF-8, giao diện sáng/tối/hệ thống
 
-## Chưa có (chưa triển khai)
-Lịch tuần/ngày, lịch âm, ngân sách tháng + cảnh báo, hóa đơn định kỳ, mục tiêu tiết kiệm, khoảng ngày tùy chọn, lặp theo năm.
+## Hạn chế đã biết
+- Sự kiện lặp theo năm chỉ được đặt lại thông báo mỗi lần mở app (không có lặp năm gốc của hệ thống).
+- Ngân sách chỉ đặt cho tháng hiện tại; danh mục là chữ tự do (chưa có bảng danh mục riêng).
+- Tìm kiếm chỉ áp dụng cho giao dịch.
 
 ## Build bằng GitHub Actions
 1. Đẩy toàn bộ thư mục này lên một repo GitHub.
