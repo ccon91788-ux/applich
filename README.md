@@ -41,7 +41,7 @@ Múi giờ thông báo cố định Asia/Ho_Chi_Minh. APK release ký bằng kh�
 ## Cập nhật app mà không cần gỡ bản cũ
 1. Tạo khóa ký cố định một lần (xem hướng dẫn trong cuộc trò chuyện) và lưu vào GitHub Secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`.
 2. Mỗi lần push, workflow ký APK bằng khóa đó và đánh số phiên bản tăng dần (`--build-number`).
-3. Tải bản mới nhất tại: `https://github.com/<tài-khoản>/<repo>/releases/latest/download/LifeSync.apk` rồi cài đè.
+3. Trong app, hộp thoại "Có bản cập nhật mới" -> "Cập nhật": app tự tải (có thanh tiến độ) rồi mở trình cài đặt của Android. Hoặc tải bản mới nhất tại: `https://github.com/<tài-khoản>/<repo>/releases/latest/download/LifeSync.apk` rồi cài đè.
 Không làm mất khóa ký: mất khóa thì không thể cập nhật đè được nữa.
 
 ## Kiểm thử

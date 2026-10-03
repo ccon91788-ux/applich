@@ -9,6 +9,7 @@ s = m.read_text(encoding="utf-8")
 perms = (
     '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n'
     '<uses-permission android:name="android.permission.INTERNET"/>\n'
+    '<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n'
     '<uses-permission android:name="android.permission.VIBRATE"/>\n'
     '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n'
     '<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>\n'
@@ -22,6 +23,20 @@ recv = (
     '<action android:name="android.intent.action.QUICKBOOT_POWERON"/>'
     '<action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>'
     '</intent-filter></receiver>\n'
+    '<provider android:name="sk.fourq.otaupdate.OtaUpdateFileProvider" '
+    'android:authorities="${applicationId}.ota_update_provider" '
+    'android:exported="false" android:grantUriPermissions="true">'
+    '<meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/filepaths"/>'
+    '</provider>\n'
+)
+xml_dir = pathlib.Path("android/app/src/main/res/xml")
+xml_dir.mkdir(parents=True, exist_ok=True)
+(xml_dir / "filepaths.xml").write_text(
+    '<?xml version="1.0" encoding="utf-8"?>\n'
+    '<paths xmlns:android="http://schemas.android.com/apk/res/android">\n'
+    '    <files-path name="internal_apk_storage" path="ota_update/"/>\n'
+    '</paths>\n',
+    encoding="utf-8",
 )
 if "POST_NOTIFICATIONS" not in s:
     s = s.replace("<application", perms + "<application", 1)

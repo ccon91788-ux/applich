@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:ota_update/ota_update.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils.dart';
@@ -76,21 +78,113 @@ class UpdateService {
         title: const Text('Có bản cập nhật mới 🎉'),
         content: Text(
           'Bản mới: build $latest (bạn đang dùng build $kBuild).\n\n'
-          'Bấm "Tải về", mở file vừa tải và chọn Cài đặt/Cập nhật. '
-          'Dữ liệu của bạn sẽ được giữ nguyên.',
+          'Bấm "Cập nhật", app sẽ tự tải bản mới. Khi tải xong, '
+          'bấm "Cập nhật" ở màn hình cài đặt của Android. '
+          'Dữ liệu của bạn được giữ nguyên.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Để sau')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Tải về')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Cập nhật')),
         ],
       ),
     );
-    if (go != true) return;
+    if (go != true || !context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _UpdateProgressDialog(),
+    );
+  }
+}
+
+/// Mở trang tải APK bằng trình duyệt (phương án dự phòng nếu tải trong app thất bại).
+Future<void> _openInBrowser() async {
+  try {
+    await launchUrl(Uri.parse(kApkUrl), mode: LaunchMode.externalApplication);
+  } catch (_) {}
+}
+
+class _UpdateProgressDialog extends StatefulWidget {
+  const _UpdateProgressDialog();
+  @override
+  State<_UpdateProgressDialog> createState() => _UpdateProgressDialogState();
+}
+
+class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
+  StreamSubscription<OtaEvent>? _sub;
+  double? _pct;
+  String _msg = 'Đang kết nối...';
+
+  @override
+  void initState() {
+    super.initState();
     try {
-      final ok = await launchUrl(Uri.parse(kApkUrl), mode: LaunchMode.externalApplication);
-      if (!ok && context.mounted) toast(context, 'Không mở được liên kết tải.');
+      _sub = OtaUpdate()
+          .execute(kApkUrl, destinationFilename: 'LifeSync.apk')
+          .listen(_onEvent, onError: (_) => _fail());
     } catch (_) {
-      if (context.mounted) toast(context, 'Không mở được liên kết tải.');
+      WidgetsBinding.instance.addPostFrameCallback((_) => _fail());
     }
+  }
+
+  void _onEvent(OtaEvent e) {
+    if (!mounted) return;
+    final name = e.status.name;
+    if (e.status == OtaStatus.DOWNLOADING) {
+      final v = double.tryParse(e.value ?? '');
+      setState(() {
+        _pct = v == null ? null : (v / 100).clamp(0, 1).toDouble();
+        _msg = 'Đang tải... ${v == null ? '' : '${v.round()}%'}';
+      });
+    } else if (e.status == OtaStatus.INSTALLING) {
+      // Trình cài đặt của Android sẽ hiện lên, đóng hộp thoại tiến độ.
+      Navigator.of(context).pop();
+    } else if (name.contains('ERROR') || name == 'CANCELED') {
+      _fail();
+    }
+  }
+
+  void _fail() {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Không cập nhật trực tiếp được. Đang mở trình duyệt để tải.')),
+    );
+    _openInBrowser();
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Đang cập nhật'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            LinearProgressIndicator(value: _pct, minHeight: 10),
+            const SizedBox(height: 12),
+            Text(_msg),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              OtaUpdate().cancel();
+              Navigator.of(context).pop();
+            },
+            child: const Text('Hủy'),
+          ),
+        ],
+      ),
+    );
   }
 }
