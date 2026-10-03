@@ -9,10 +9,12 @@
 - **Hóa đơn định kỳ**: hiện trên lịch, nhắc 8:00 ngày đến hạn, "Đã thanh toán" tự tạo giao dịch chi + dời sang tháng sau, chống trả trùng một kỳ
 - **Mục tiêu tiết kiệm**: thanh tiến độ %, thêm/rút tiền, sửa/xóa, hạn chót và số tiền cần để dành mỗi tháng
 - **Thống kê**: tổng thu/chi/số dư/tiết kiệm, biểu đồ tròn theo danh mục, cột thu-chi, xu hướng 6 tháng, lọc tháng này/trước/3/6 tháng/năm nay/tùy chọn
+- **Ghi chú**: tạo/sửa/xóa, ghim, chọn màu pastel, tìm kiếm
+- Ô nhập tiền tự thêm dấu phân cách (1500000 → 1,500,000)
 - Sao lưu/khôi phục JSON (phiên bản 2, vẫn nhập được bản 1), xuất CSV UTF-8, giao diện sáng/tối/hệ thống
 
 ## Hạn chế đã biết
-- Sự kiện lặp theo năm chỉ được đặt lại thông báo mỗi lần mở app (không có lặp năm gốc của hệ thống).
+- Sự kiện lặp theo năm vào ngày 29/2 chỉ nhắc ở năm nhuận.
 - Ngân sách chỉ đặt cho tháng hiện tại; danh mục là chữ tự do (chưa có bảng danh mục riêng).
 - Tìm kiếm chỉ áp dụng cho giao dịch.
 
@@ -41,3 +43,6 @@ Múi giờ thông báo cố định Asia/Ho_Chi_Minh. APK release ký bằng kh�
 2. Mỗi lần push, workflow ký APK bằng khóa đó và đánh số phiên bản tăng dần (`--build-number`).
 3. Tải bản mới nhất tại: `https://github.com/<tài-khoản>/<repo>/releases/latest/download/LifeSync.apk` rồi cài đè.
 Không làm mất khóa ký: mất khóa thì không thể cập nhật đè được nữa.
+
+## Kiểm thử
+`flutter test` gồm: logic thuần (nhập nhanh, ngân sách, hóa đơn, tiết kiệm, lịch âm, định dạng tiền, sao lưu) và test **trên SQLite thật** (`test/db_test.dart`, dùng `sqflite_common_ffi`, cần `libsqlite3-dev` trên Linux — workflow đã cài sẵn), gồm cả kiểm tra nâng cấp CSDL từ phiên bản 1 lên 4.

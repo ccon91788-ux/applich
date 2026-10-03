@@ -94,7 +94,20 @@ class LunarService {
     return i - 1;
   }
 
+  static final Map<int, LunarDate> _cache = <int, LunarDate>{};
+
+  /// Có bộ nhớ đệm: mỗi ngày chỉ tính một lần.
   static LunarDate toLunar(DateTime d) {
+    final key = d.year * 10000 + d.month * 100 + d.day;
+    final hit = _cache[key];
+    if (hit != null) return hit;
+    final r = _compute(d);
+    if (_cache.length > 6000) _cache.clear();
+    _cache[key] = r;
+    return r;
+  }
+
+  static LunarDate _compute(DateTime d) {
     final dn = _jd(d.day, d.month, d.year);
     final k = ((dn - 2415021.076998695) / 29.530588853).floor();
     var ms = _newMoon(k + 1);

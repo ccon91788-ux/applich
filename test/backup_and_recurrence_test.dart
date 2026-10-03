@@ -10,6 +10,7 @@ void main() {
       budgets: [Budget(ym: '2026-10', limit: 5000000, notified: 3)],
       bills: [Bill(id: 1, name: 'Internet', amount: 300000, category: 'Hóa đơn', dueDay: 10, nextDue: DateTime(2026, 10, 10))],
       goals: [Goal(id: 1, name: 'Laptop', target: 10000000, saved: 3000000, created: DateTime(2026, 10, 1))],
+      notes: [Note(id: 1, title: 'Việc cần làm', content: 'Mua sữa', color: 2, pinned: true, updated: DateTime(2026, 10, 1))],
     );
     final d = BackupService.parse(s);
     expect(d.events.single.title, 'A');
@@ -18,12 +19,15 @@ void main() {
     expect(d.budgets.single.notified, 3);
     expect(d.bills.single.dueDay, 10);
     expect(d.goals.single.saved, 3000000);
+    expect(d.notes.single.title, 'Việc cần làm');
+    expect(d.notes.single.pinned, true);
   });
 
   test('Backup v1 cũ vẫn nhập được', () {
     final d = BackupService.parse('{"version":1,"events":[],"transactions":[]}');
     expect(d.budgets, isEmpty);
     expect(d.goals, isEmpty);
+    expect(d.notes, isEmpty);
   });
 
   test('Backup: JSON hỏng / thiếu trường / sai phiên bản / dữ liệu sai', () {

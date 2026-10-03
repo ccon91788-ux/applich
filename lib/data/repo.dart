@@ -39,30 +39,67 @@ class Repo {
     );
   }
 
-  static Future<Database> get _db async =>
-      _d ??= await openDatabase(
-        p.join(await getDatabasesPath(), 'lifesync.db'),
-        version: 2,
-        onCreate: (d, v) async {
-          await d.execute(
-            'CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, '
-            'title TEXT NOT NULL, description TEXT, start_ms INTEGER NOT NULL, '
-            'end_ms INTEGER, reminder_min INTEGER NOT NULL, repeat INTEGER NOT NULL)',
-          );
-          await d.execute(
-            'CREATE TABLE transactions(id INTEGER PRIMARY KEY AUTOINCREMENT, '
-            'type TEXT NOT NULL, amount INTEGER NOT NULL, category TEXT NOT NULL, '
-            'note TEXT, date_ms INTEGER NOT NULL)',
-          );
-          await _createV2(d);
-        },
-        onUpgrade: (d, oldV, newV) async {
-          if (oldV < 2) {
-            await d.execute('ALTER TABLE events ADD COLUMN end_ms INTEGER');
+  static Future<void> _createNotes(Database d) async {
+    await d.execute(
+      'CREATE TABLE IF NOT EXISTS notes(id INTEGER PRIMARY KEY AUTOINCREMENT, '
+      'title TEXT NOT NULL, content TEXT, color INTEGER NOT NULL, '
+      'pinned INTEGER NOT NULL, updated_ms INTEGER NOT NULL)',
+    );
+  }
+
+  static Future<void> _createIndexes(Database d) async {
+    await d.execute('CREATE INDEX IF NOT EXISTS idx_txn_date ON transactions(date_ms)');
+    await d.execute('CREATE INDEX IF NOT EXISTS idx_txn_type_date ON transactions(type, date_ms)');
+    await d.execute('CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_ms)');
+  }
+
+  /// Mở (hoặc tạo / nâng cấp) CSDL tại [path]. Dùng cho cả app lẫn test.
+  static Future<Database> openAt(String path, {DatabaseFactory? factory}) =>
+      (factory ?? databaseFactory).openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 4,
+          onCreate: (d, v) async {
+            await d.execute(
+              'CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, '
+              'title TEXT NOT NULL, description TEXT, start_ms INTEGER NOT NULL, '
+              'end_ms INTEGER, reminder_min INTEGER NOT NULL, repeat INTEGER NOT NULL)',
+            );
+            await d.execute(
+              'CREATE TABLE transactions(id INTEGER PRIMARY KEY AUTOINCREMENT, '
+              'type TEXT NOT NULL, amount INTEGER NOT NULL, category TEXT NOT NULL, '
+              'note TEXT, date_ms INTEGER NOT NULL)',
+            );
             await _createV2(d);
-          }
-        },
+            await _createIndexes(d);
+            await _createNotes(d);
+          },
+          onUpgrade: (d, oldV, newV) async {
+            if (oldV < 2) {
+              await d.execute('ALTER TABLE events ADD COLUMN end_ms INTEGER');
+              await _createV2(d);
+            }
+            if (oldV < 3) {
+              await _createIndexes(d);
+            }
+            if (oldV < 4) {
+              await _createNotes(d);
+            }
+          },
+        ),
       );
+
+  static Future<Database> get _db async =>
+      _d ??= await openAt(p.join(await getDatabasesPath(), 'lifesync.db'));
+
+  @visibleForTesting
+  static void useDb(Database d) => _d = d;
+
+  @visibleForTesting
+  static Future<void> closeForTest() async {
+    await _d?.close();
+    _d = null;
+  }
 
   // ---------- Sự kiện ----------
   static Future<List<Event>> events() async {
@@ -270,6 +307,29 @@ class Repo {
     return true;
   }
 
+  // ---------- Ghi chú ----------
+  static Future<List<Note>> notes() async {
+    final rows = await (await _db).query('notes', orderBy: 'pinned DESC, updated_ms DESC');
+    return rows.map(Note.fromMap).toList();
+  }
+
+  static Future<void> saveNote(Note n) async {
+    final d = await _db;
+    n.updated = DateTime.now();
+    if (n.id == null) {
+      n.id = await d.insert('notes', n.toMap()..remove('id'));
+    } else {
+      await d.update('notes', n.toMap(), where: 'id=?', whereArgs: [n.id]);
+    }
+    dataTick.value++;
+  }
+
+  static Future<void> deleteNote(Note n) async {
+    if (n.id == null) return;
+    await (await _db).delete('notes', where: 'id=?', whereArgs: [n.id]);
+    dataTick.value++;
+  }
+
   // ---------- Tổng hợp ----------
   static Future<({List<Event> events, List<Bill> bills})> calendarData() async =>
       (events: await events(), bills: await bills());
@@ -292,6 +352,7 @@ class Repo {
       budgets: (await d.query('budgets')).map(Budget.fromMap).toList(),
       bills: await bills(),
       goals: await goals(),
+      notes: await notes(),
     );
   }
 
@@ -304,7 +365,7 @@ class Repo {
       await Notif.cancelBill(b.id!);
     }
     await d.transaction((t) async {
-      for (final tb in ['events', 'transactions', 'budgets', 'recurring_bills', 'bill_payments', 'goals']) {
+      for (final tb in ['events', 'transactions', 'budgets', 'recurring_bills', 'bill_payments', 'goals', 'notes']) {
         await t.delete(tb);
       }
       const r = ConflictAlgorithm.replace;
@@ -322,6 +383,9 @@ class Repo {
       }
       for (final x in data.goals) {
         await t.insert('goals', x.toMap(), conflictAlgorithm: r);
+      }
+      for (final x in data.notes) {
+        await t.insert('notes', x.toMap(), conflictAlgorithm: r);
       }
     });
     await Notif.rescheduleAll(await events(), await bills());

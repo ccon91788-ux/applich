@@ -7,6 +7,7 @@ typedef BackupData = ({
   List<Budget> budgets,
   List<Bill> bills,
   List<Goal> goals,
+  List<Note> notes,
 });
 
 class BackupService {
@@ -18,6 +19,7 @@ class BackupService {
     List<Budget> budgets = const [],
     List<Bill> bills = const [],
     List<Goal> goals = const [],
+    List<Note> notes = const [],
   }) => jsonEncode({
     'app': 'LifeSync',
     'version': version,
@@ -27,6 +29,7 @@ class BackupService {
     'budgets': budgets.map((e) => e.toMap()).toList(),
     'recurring_bills': bills.map((e) => e.toMap()).toList(),
     'goals': goals.map((e) => e.toMap()).toList(),
+    'notes': notes.map((e) => e.toMap()).toList(),
   });
 
   static List<T> _list<T>(Object? raw, T Function(Map<String, Object?>) conv) {
@@ -91,7 +94,22 @@ class BackupService {
         }
         return Goal.fromMap(m);
       });
-      return (events: events, txns: txns, budgets: budgets, bills: bills, goals: goals);
+      final notes = _list<Note>(j['notes'], (m) {
+        if (m['title'] is! String ||
+            (m['content'] != null && m['content'] is! String) ||
+            (m['updated_ms'] != null && m['updated_ms'] is! int)) {
+          throw const FormatException('note');
+        }
+        return Note.fromMap(m);
+      });
+      return (
+        events: events,
+        txns: txns,
+        budgets: budgets,
+        bills: bills,
+        goals: goals,
+        notes: notes,
+      );
     } on FormatException {
       rethrow;
     } catch (_) {

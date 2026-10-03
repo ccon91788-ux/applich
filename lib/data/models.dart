@@ -212,3 +212,41 @@ class Goal {
     ),
   );
 }
+
+class Note {
+  int? id;
+  String title;
+  String content;
+  int color; // chỉ số màu pastel 0..5
+  bool pinned;
+  DateTime updated;
+
+  Note({
+    this.id,
+    this.title = '',
+    this.content = '',
+    this.color = 0,
+    this.pinned = false,
+    required this.updated,
+  });
+
+  Map<String, Object?> toMap() => {
+    'id': id,
+    'title': title,
+    'content': content,
+    'color': color,
+    'pinned': pinned ? 1 : 0,
+    'updated_ms': updated.millisecondsSinceEpoch,
+  };
+
+  factory Note.fromMap(Map<String, Object?> m) => Note(
+    id: (m['id'] as num?)?.toInt(),
+    title: (m['title'] as String?) ?? '',
+    content: (m['content'] as String?) ?? '',
+    color: (m['color'] as num?)?.toInt() ?? 0,
+    pinned: ((m['pinned'] as num?)?.toInt() ?? 0) == 1,
+    updated: DateTime.fromMillisecondsSinceEpoch(
+      ((m['updated_ms'] as num?) ?? DateTime.now().millisecondsSinceEpoch).toInt(),
+    ),
+  );
+}

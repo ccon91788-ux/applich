@@ -7,6 +7,7 @@ import 'data/repo.dart';
 import 'screens/analytics_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/finance_screen.dart';
+import 'screens/notes_screen.dart';
 import 'services/update_service.dart';
 import 'ui.dart';
 
@@ -73,7 +74,7 @@ class _ShellState extends State<Shell> {
     });
   }
 
-  static const _pages = [CalendarScreen(), FinanceScreen(), AnalyticsScreen()];
+  static const _pages = [CalendarScreen(), FinanceScreen(), NotesScreen(), AnalyticsScreen()];
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +86,7 @@ class _ShellState extends State<Shell> {
         destinations: const [
           NavigationDestination(icon: Text('🗓️', style: TextStyle(fontSize: 22)), label: 'Lịch'),
           NavigationDestination(icon: Text('👛', style: TextStyle(fontSize: 22)), label: 'Tài chính'),
+          NavigationDestination(icon: Text('📝', style: TextStyle(fontSize: 22)), label: 'Ghi chú'),
           NavigationDestination(icon: Text('📊', style: TextStyle(fontSize: 22)), label: 'Thống kê'),
         ],
       ),

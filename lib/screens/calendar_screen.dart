@@ -110,14 +110,11 @@ class _CalendarState extends State<CalendarScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Sự kiện'),
       ),
-      body: ValueListenableBuilder<int>(
-        valueListenable: dataTick,
-        builder: (context, _, __) =>
-            FutureBuilder<({List<Event> events, List<Bill> bills})>(
-          future: Repo.calendarData(),
-          builder: (context, snap) {
-            final events = snap.data?.events ?? <Event>[];
-            final bills = snap.data?.bills ?? <Bill>[];
+      body: DataBuilder<({List<Event> events, List<Bill> bills})>(
+        load: () => Repo.calendarData(),
+        builder: (context, data) {
+            final events = data?.events ?? <Event>[];
+            final bills = data?.bills ?? <Bill>[];
             return ValueListenableBuilder<bool>(
               valueListenable: showLunar,
               builder: (context, lunar, _) => ListView(
@@ -130,7 +127,6 @@ class _CalendarState extends State<CalendarScreen> {
               ),
             );
           },
-        ),
       ),
     );
   }

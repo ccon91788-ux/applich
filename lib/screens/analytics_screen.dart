@@ -78,7 +78,7 @@ class _AnalyticsState extends State<AnalyticsScreen> {
         'LifeSync_Backup_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.json',
         await Repo.exportJson(),
       );
-      await Share.shareXFiles([XFile(f.path)]);
+      await SharePlus.instance.share(ShareParams(files: [XFile(f.path)]));
     } catch (_) {
       if (mounted) toast(context, 'Không thể xuất sao lưu.');
     }
@@ -90,7 +90,7 @@ class _AnalyticsState extends State<AnalyticsScreen> {
         'LifeSync_Transactions_${DateFormat('yyyy-MM').format(DateTime.now())}.csv',
         CsvService.build(await Repo.txns()),
       );
-      await Share.shareXFiles([XFile(f.path)]);
+      await SharePlus.instance.share(ShareParams(files: [XFile(f.path)]));
     } catch (_) {
       if (mounted) toast(context, 'Không thể xuất CSV.');
     }
@@ -111,7 +111,7 @@ class _AnalyticsState extends State<AnalyticsScreen> {
           content: Text(
             'Toàn bộ dữ liệu hiện tại sẽ bị thay thế bằng: ${data.events.length} sự kiện, '
             '${data.txns.length} giao dịch, ${data.budgets.length} ngân sách, '
-            '${data.bills.length} hóa đơn, ${data.goals.length} mục tiêu.',
+            '${data.bills.length} hóa đơn, ${data.goals.length} mục tiêu, ${data.notes.length} ghi chú.',
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Hủy')),
@@ -160,16 +160,13 @@ class _AnalyticsState extends State<AnalyticsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Thống kê')),
-      body: ValueListenableBuilder<int>(
-        valueListenable: dataTick,
-        builder: (context, _, __) =>
-            FutureBuilder<({List<Txn> txns, BudgetStatus budget, int savings})>(
-          future: Repo.analytics(),
-          builder: (context, snap) {
+      body: DataBuilder<({List<Txn> txns, BudgetStatus budget, int savings})>(
+        load: () => Repo.analytics(),
+        builder: (context, data) {
             final (a, b) = _range();
-            final all = snap.data?.txns ?? <Txn>[];
-            final bs = snap.data?.budget;
-            final savings = snap.data?.savings ?? 0;
+            final all = data?.txns ?? <Txn>[];
+            final bs = data?.budget;
+            final savings = data?.savings ?? 0;
             final list = all.where((t) => !t.date.isBefore(a) && t.date.isBefore(b)).toList();
             final inc = list.where((t) => t.isIncome).fold<int>(0, (s, t) => s + t.amount);
             final exp = list.where((t) => !t.isIncome).fold<int>(0, (s, t) => s + t.amount);
@@ -483,7 +480,6 @@ class _AnalyticsState extends State<AnalyticsScreen> {
               ],
             );
           },
-        ),
       ),
     );
   }

@@ -70,8 +70,10 @@ class Notif {
         return DateTimeComponents.dayOfWeekAndTime;
       case 3:
         return DateTimeComponents.dayOfMonthAndTime;
+      case 4:
+        return DateTimeComponents.dateAndTime; // lặp hằng năm (tháng + ngày + giờ)
       default:
-        return null; // không lặp, hoặc lặp năm (đặt lại mỗi lần mở app)
+        return null;
     }
   }
 

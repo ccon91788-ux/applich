@@ -19,13 +19,14 @@ dependencies:
   timezone: ^0.10.0
   fl_chart: ^0.70.2
   file_picker: ^8.3.7
-  share_plus: ^10.1.4
+  share_plus: ^13.2.0
   shared_preferences: ^2.3.4
   url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  sqflite_common_ffi: ^2.3.4
 
 flutter:
   uses-material-design: true

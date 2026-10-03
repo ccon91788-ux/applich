@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../data/models.dart';
 import '../data/repo.dart';
@@ -114,6 +113,80 @@ class _TxnTabState extends State<TxnTab> {
     ),
   );
 
+  Widget _hero(int inc, int exp) => SoftCard(
+    gradient: heroGradient(context),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Số dư', style: TextStyle(color: Colors.white70)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            fmtMoney(inc - exp),
+            style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _pill('⬇️ Thu', inc)),
+            const SizedBox(width: 10),
+            Expanded(child: _pill('⬆️ Chi', exp)),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _tile(Txn t) => SoftCard(
+    padding: const EdgeInsets.all(12),
+    onTap: () => Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => TxnForm(initial: t)),
+    ),
+    child: Row(
+      children: [
+        Badge3D(catEmoji(t.category), color: t.category.length),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(t.category, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              Text(
+                '${DateFormat('dd/MM/yyyy').format(t.date)}${t.note.isEmpty ? '' : ' • ${t.note}'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '${t.isIncome ? '+' : '-'}${fmtMoney(t.amount)}',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: t.isIncome ? const Color(0xFF2E9E6B) : const Color(0xFFE0556F),
+              ),
+            ),
+            InkWell(
+              onTap: () => Repo.deleteTxn(t),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.delete_outline, size: 20, semanticLabel: 'Xóa giao dịch'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -148,107 +221,40 @@ class _TxnTabState extends State<TxnTab> {
             ),
           ),
           Expanded(
-            child: ValueListenableBuilder<int>(
-              valueListenable: dataTick,
-              builder: (context, _, __) => FutureBuilder<List<Txn>>(
-                future: Repo.txns(),
-                builder: (context, snap) {
-                  final all = snap.data ?? <Txn>[];
-                  final inc = all.where((t) => t.isIncome).fold<int>(0, (a, t) => a + t.amount);
-                  final exp = all.where((t) => !t.isIncome).fold<int>(0, (a, t) => a + t.amount);
-                  final ql = q.trim().toLowerCase();
-                  final list = all
-                      .where((t) =>
-                          ql.isEmpty ||
-                          t.category.toLowerCase().contains(ql) ||
-                          t.note.toLowerCase().contains(ql))
-                      .toList();
-                  return ListView(
-                    padding: const EdgeInsets.only(bottom: 96),
-                    children: [
-                      SoftCard(
-                        gradient: heroGradient(context),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Số dư', style: TextStyle(color: Colors.white70)),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                fmtMoney(inc - exp),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(child: _pill('⬇️ Thu', inc)),
-                                const SizedBox(width: 10),
-                                Expanded(child: _pill('⬆️ Chi', exp)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (list.isEmpty)
-                        EmptyState('🐷', all.isEmpty ? 'Chưa có giao dịch nào' : 'Không tìm thấy giao dịch'),
-                      for (final t in list)
-                        SoftCard(
-                          padding: const EdgeInsets.all(12),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => TxnForm(initial: t)),
-                          ),
-                          child: Row(
-                            children: [
-                              Badge3D(catEmoji(t.category), color: t.category.length),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(t.category, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                                    Text(
-                                      '${DateFormat('dd/MM/yyyy').format(t.date)}${t.note.isEmpty ? '' : ' • ${t.note}'}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    '${t.isIncome ? '+' : '-'}${fmtMoney(t.amount)}',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      color: t.isIncome ? const Color(0xFF2E9E6B) : const Color(0xFFE0556F),
-                                    ),
-                                  ),
-                                  InkWell(
-                                    onTap: () => Repo.deleteTxn(t),
-                                    child: const Padding(
-                                      padding: EdgeInsets.all(4),
-                                      child: Icon(Icons.delete_outline, size: 20, semanticLabel: 'Xóa giao dịch'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
+            child: DataBuilder<List<Txn>>(
+              load: Repo.txns,
+              builder: (context, data) {
+                final all = data ?? <Txn>[];
+                var inc = 0;
+                var exp = 0;
+                for (final t in all) {
+                  if (t.isIncome) {
+                    inc += t.amount;
+                  } else {
+                    exp += t.amount;
+                  }
+                }
+                final ql = q.trim().toLowerCase();
+                final list = ql.isEmpty
+                    ? all
+                    : all
+                          .where((t) =>
+                              t.category.toLowerCase().contains(ql) ||
+                              t.note.toLowerCase().contains(ql))
+                          .toList();
+                // ListView.builder chỉ dựng các dòng đang hiển thị -> mượt với hàng nghìn giao dịch.
+                return ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 96),
+                  itemCount: list.isEmpty ? 2 : list.length + 1,
+                  itemBuilder: (context, i) {
+                    if (i == 0) return _hero(inc, exp);
+                    if (list.isEmpty) {
+                      return EmptyState('🐷', all.isEmpty ? 'Chưa có giao dịch nào' : 'Không tìm thấy giao dịch');
+                    }
+                    return _tile(list[i - 1]);
+                  },
+                );
+              },
             ),
           ),
         ],
@@ -280,7 +286,7 @@ class _TxnFormState extends State<TxnForm> {
     income = t?.isIncome ?? false;
     date = t?.date ?? DateTime.now();
     if (t != null) {
-      if (t.amount > 0) _amount.text = '${t.amount}';
+      if (t.amount > 0) _amount.text = groupDigits('${t.amount}');
       _cat.text = t.category;
       _note.text = t.note;
     }
@@ -295,7 +301,7 @@ class _TxnFormState extends State<TxnForm> {
   }
 
   Future<void> _save() async {
-    final a = int.tryParse(_amount.text);
+    final a = parseMoney(_amount.text);
     if (a == null || a <= 0) {
       toast(context, 'Số tiền không hợp lệ.');
       return;
@@ -340,7 +346,7 @@ class _TxnFormState extends State<TxnForm> {
           TextField(
             controller: _amount,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: [const ThousandsFormatter()],
             decoration: const InputDecoration(labelText: 'Số tiền (₫)'),
           ),
           const SizedBox(height: 12),

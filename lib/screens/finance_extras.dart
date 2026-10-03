@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../data/models.dart';
 import '../data/repo.dart';
@@ -59,12 +58,10 @@ class BudgetTab extends StatelessWidget {
           if (context.mounted) await _edit(context, st.budget);
         },
       ),
-      body: ValueListenableBuilder<int>(
-        valueListenable: dataTick,
-        builder: (context, _, __) => FutureBuilder<BudgetStatus>(
-          future: Repo.budgetStatus(now),
-          builder: (context, snap) {
-            final st = snap.data;
+      body: DataBuilder<BudgetStatus>(
+        load: () => Repo.budgetStatus(now),
+        builder: (context, data) {
+            final st = data;
             final b = st?.budget;
             if (st == null || b == null) {
               return ListView(
@@ -168,7 +165,6 @@ class BudgetTab extends StatelessWidget {
               ],
             );
           },
-        ),
       ),
     );
   }
@@ -268,12 +264,10 @@ class BillsTab extends StatelessWidget {
         label: const Text('Hóa đơn'),
         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BillForm())),
       ),
-      body: ValueListenableBuilder<int>(
-        valueListenable: dataTick,
-        builder: (context, _, __) => FutureBuilder<List<Bill>>(
-          future: Repo.bills(),
-          builder: (context, snap) {
-            final bills = snap.data ?? <Bill>[];
+      body: DataBuilder<List<Bill>>(
+        load: () => Repo.bills(),
+        builder: (context, data) {
+            final bills = data ?? <Bill>[];
             if (bills.isEmpty) {
               return ListView(children: const [EmptyState('🧾', 'Chưa có hóa đơn định kỳ.\nThêm điện, nước, internet, tiền nhà...')]);
             }
@@ -289,7 +283,6 @@ class BillsTab extends StatelessWidget {
               ],
             );
           },
-        ),
       ),
     );
   }
@@ -316,7 +309,7 @@ class _BillFormState extends State<BillForm> {
     final b = widget.bill;
     if (b != null) {
       _name.text = b.name;
-      _amount.text = '${b.amount}';
+      _amount.text = groupDigits('${b.amount}');
       _cat.text = b.category;
       _note.text = b.note;
       day = b.dueDay;
@@ -334,7 +327,7 @@ class _BillFormState extends State<BillForm> {
   }
 
   Future<void> _save() async {
-    final a = int.tryParse(_amount.text);
+    final a = parseMoney(_amount.text);
     if (_name.text.trim().isEmpty) {
       toast(context, 'Vui lòng nhập tên hóa đơn.');
       return;
@@ -374,7 +367,7 @@ class _BillFormState extends State<BillForm> {
           TextField(
             controller: _amount,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: [const ThousandsFormatter()],
             decoration: const InputDecoration(labelText: 'Số tiền (₫)'),
           ),
           const SizedBox(height: 12),
@@ -492,12 +485,10 @@ class GoalsTab extends StatelessWidget {
         label: const Text('Mục tiêu'),
         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GoalForm())),
       ),
-      body: ValueListenableBuilder<int>(
-        valueListenable: dataTick,
-        builder: (context, _, __) => FutureBuilder<List<Goal>>(
-          future: Repo.goals(),
-          builder: (context, snap) {
-            final gs = snap.data ?? <Goal>[];
+      body: DataBuilder<List<Goal>>(
+        load: () => Repo.goals(),
+        builder: (context, data) {
+            final gs = data ?? <Goal>[];
             if (gs.isEmpty) {
               return ListView(children: const [EmptyState('🎯', 'Chưa có mục tiêu tiết kiệm.\nVí dụ: mua laptop, du lịch...')]);
             }
@@ -506,7 +497,6 @@ class GoalsTab extends StatelessWidget {
               children: [for (final g in gs) _card(context, g)],
             );
           },
-        ),
       ),
     );
   }
@@ -532,8 +522,8 @@ class _GoalFormState extends State<GoalForm> {
     final g = widget.goal;
     if (g != null) {
       _name.text = g.name;
-      _target.text = '${g.target}';
-      _saved.text = '${g.saved}';
+      _target.text = groupDigits('${g.target}');
+      _saved.text = groupDigits('${g.saved}');
       _note.text = g.note;
       deadline = g.deadline;
     }
@@ -549,8 +539,8 @@ class _GoalFormState extends State<GoalForm> {
   }
 
   Future<void> _save() async {
-    final t = int.tryParse(_target.text);
-    final s = _saved.text.trim().isEmpty ? 0 : int.tryParse(_saved.text);
+    final t = parseMoney(_target.text);
+    final s = _saved.text.trim().isEmpty ? 0 : parseMoney(_saved.text);
     if (_name.text.trim().isEmpty) {
       toast(context, 'Vui lòng nhập tên mục tiêu.');
       return;
@@ -589,14 +579,14 @@ class _GoalFormState extends State<GoalForm> {
           TextField(
             controller: _target,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: [const ThousandsFormatter()],
             decoration: const InputDecoration(labelText: 'Số tiền mục tiêu (₫)'),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _saved,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: [const ThousandsFormatter()],
             decoration: const InputDecoration(labelText: 'Số tiền đã có (₫)'),
           ),
           const SizedBox(height: 12),

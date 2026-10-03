@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'data/repo.dart';
+import 'utils.dart';
 
 const _pastels = [
   Color(0xFFFFD6C2), // đào
@@ -219,7 +220,9 @@ class _AmountDialogState extends State<_AmountDialog> {
   @override
   void initState() {
     super.initState();
-    _c = TextEditingController(text: widget.initial == null ? '' : '${widget.initial}');
+    _c = TextEditingController(
+      text: widget.initial == null ? '' : groupDigits('${widget.initial}'),
+    );
   }
 
   @override
@@ -236,14 +239,14 @@ class _AmountDialogState extends State<_AmountDialog> {
         controller: _c,
         autofocus: true,
         keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        inputFormatters: [const ThousandsFormatter()],
         decoration: InputDecoration(labelText: widget.label, errorText: _err),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
         FilledButton(
           onPressed: () {
-            final v = int.tryParse(_c.text);
+            final v = parseMoney(_c.text);
             if (v == null || v <= 0) {
               setState(() => _err = 'Số tiền không hợp lệ');
               return;
@@ -253,6 +256,51 @@ class _AmountDialogState extends State<_AmountDialog> {
           child: const Text('Lưu'),
         ),
       ],
+    );
+  }
+}
+
+/// Tải dữ liệu một lần, giữ kết quả trong bộ nhớ và chỉ tải lại khi dữ liệu thay đổi
+/// (dataTick tăng). Bấm chọn ngày, gõ tìm kiếm... không còn truy vấn lại CSDL.
+class DataBuilder<T> extends StatefulWidget {
+  const DataBuilder({super.key, required this.load, required this.builder});
+  final Future<T> Function() load;
+  final Widget Function(BuildContext context, T? data) builder;
+
+  @override
+  State<DataBuilder<T>> createState() => _DataBuilderState<T>();
+}
+
+class _DataBuilderState<T> extends State<DataBuilder<T>> {
+  late Future<T> _future;
+  T? _last;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.load();
+    dataTick.addListener(_reload);
+  }
+
+  void _reload() {
+    if (!mounted) return;
+    setState(() => _future = widget.load());
+  }
+
+  @override
+  void dispose() {
+    dataTick.removeListener(_reload);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<T>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.hasData) _last = snap.data;
+        return widget.builder(context, snap.data ?? _last);
+      },
     );
   }
 }
