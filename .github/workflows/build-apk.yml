@@ -22,7 +22,8 @@ jobs:
           cache: true
       - name: Generate Android scaffolding
         run: |
-          flutter create --platform=android --org com.lifesync --project-name lifesync .
+          set -o pipefail
+          flutter create --platform=android --org com.lifesync --project-name lifesync . 2>&1 | tee -a ci.log
           rm -f test/widget_test.dart
       - name: Chuẩn bị khóa ký cố định
         env:
@@ -39,33 +40,50 @@ jobs:
           fi
       - name: Vá cấu hình Android
         run: python3 tool/patch_android.py
-      - run: flutter pub get
+      - name: Cài gói (flutter pub get)
+        run: |
+          set -o pipefail
+          flutter pub get 2>&1 | tee -a ci.log
       - name: Format (áp dụng định dạng chuẩn rồi kiểm tra)
         run: |
-          dart format lib test
-          dart format --set-exit-if-changed lib test
-      - run: flutter analyze --no-fatal-infos
+          set -o pipefail
+          dart format lib test 2>&1 | tee -a ci.log
+          dart format --set-exit-if-changed lib test 2>&1 | tee -a ci.log
+      - name: Phân tích mã (flutter analyze)
+        run: |
+          set -o pipefail
+          flutter analyze --no-fatal-infos 2>&1 | tee -a ci.log
       - name: Cài SQLite cho test cơ sở dữ liệu
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-      - run: flutter test
+      - name: Chạy test (flutter test)
+        run: |
+          set -o pipefail
+          flutter test 2>&1 | tee -a ci.log
       - name: Build APK
         run: |
           set -o pipefail
-          flutter build apk --release --build-number=${{ github.run_number }} --dart-define=BUILD_NUMBER=${{ github.run_number }} 2>&1 | tee build.log
+          flutter build apk --release --build-number=${{ github.run_number }} --dart-define=BUILD_NUMBER=${{ github.run_number }} 2>&1 | tee -a ci.log
       - name: Tóm tắt lỗi build
         if: failure()
         run: |
           {
             echo '## Chi tiết lỗi build'
             echo '```'
-            grep -n -B3 -A25 -E "What went wrong|FAILURE|Could not|error:" build.log | head -90
+            if [ -f ci.log ]; then
+              grep -n -B2 -A12 -E "What went wrong|Because |version solving failed|error •|Some tests failed|FAILURE|Could not|Error:" ci.log | head -120
+              echo '--- 40 dòng cuối của log ---'
+              tail -n 40 ci.log
+            else
+              echo 'Chưa có log (lỗi xảy ra trước khi ghi log).'
+            fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: build-log
-          path: build.log
+          path: ci.log
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: LifeSync-release-apk

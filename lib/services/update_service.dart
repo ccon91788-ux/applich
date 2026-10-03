@@ -114,6 +114,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
   StreamSubscription<OtaEvent>? _sub;
   double? _pct;
   String _msg = 'Đang kết nối...';
+  bool _done = false; // chống đóng hộp thoại hai lần (sự kiện hệ thống có thể đến muộn)
 
   @override
   void initState() {
@@ -128,7 +129,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
   }
 
   void _onEvent(OtaEvent e) {
-    if (!mounted) return;
+    if (_done || !mounted) return;
     final name = e.status.name;
     if (e.status == OtaStatus.DOWNLOADING) {
       final v = double.tryParse(e.value ?? '');
@@ -138,6 +139,8 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
       });
     } else if (e.status == OtaStatus.INSTALLING) {
       // Trình cài đặt của Android sẽ hiện lên, đóng hộp thoại tiến độ.
+      if (_done) return;
+      _done = true;
       Navigator.of(context).pop();
     } else if (name.contains('ERROR') || name == 'CANCELED') {
       _fail();
@@ -145,7 +148,8 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
   }
 
   void _fail() {
-    if (!mounted) return;
+    if (_done || !mounted) return;
+    _done = true;
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
     messenger.showSnackBar(
@@ -178,6 +182,8 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
         actions: [
           TextButton(
             onPressed: () {
+              if (_done) return;
+              _done = true;
               OtaUpdate().cancel();
               Navigator.of(context).pop();
             },
